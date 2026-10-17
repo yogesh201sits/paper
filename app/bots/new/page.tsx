@@ -1,7 +1,7 @@
-
 import Link from "next/link"
 import { ArrowLeft, Bot, Sparkles } from "lucide-react"
 import { PaperAvatar } from "@/components/paper-avatar"
+import { BotAvatarPicker } from "@/components/bot-avatar-picker"
 import { createBot } from "../actions"
 
 const inputClass =
@@ -32,10 +32,6 @@ export default function NewBotPage() {
         </Link>
 
         <div className="mb-8">
-          <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-[#FFF2EC]">
-            <Sparkles className="size-6 text-[#FF6A2A]" />
-          </div>
-
           <h1 className="text-3xl font-bold tracking-tight">
             Create a new bot
           </h1>
@@ -49,27 +45,29 @@ export default function NewBotPage() {
           action={createBot}
           className="space-y-6 rounded-2xl border border-[#E7E7E7] bg-white p-6 shadow-sm sm:p-8"
         >
-          <div className="flex items-center gap-4 rounded-xl bg-[#F7F7F7] p-4">
-            <PaperAvatar seed="Felix" className="size-16" />
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold">Your bot's identity</p>
+          {/* Avatar */}
+          <div className="space-y-4 rounded-xl border border-[#E7E7E7] bg-[#F7F7F7] p-4">
+            <div>
+              <p className="font-semibold text-[#111111]">Your bot&apos;s identity</p>
               <p className="mt-1 text-xs leading-5 text-[#737373]">
-                Choose a unique avatar seed. You can customize it later.
+                Customize your bot&apos;s avatar by generating a new seed.
               </p>
             </div>
-            <input
-              name="avatar"
-              defaultValue="Felix"
-              required
-              aria-label="Avatar seed"
-              className="w-28 rounded-lg border border-[#E7E7E7] bg-white px-3 py-2 text-sm outline-none focus:border-[#FF6A2A]"
-            />
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-[#111111]">
+                Avatar
+              </label>
+              <BotAvatarPicker />
+            </div>
           </div>
 
+          {/* Name */}
           <div className="space-y-2">
             <label htmlFor="name" className="text-sm font-medium">
               Bot name
             </label>
+
             <input
               id="name"
               name="name"
@@ -80,10 +78,12 @@ export default function NewBotPage() {
             />
           </div>
 
+          {/* Role */}
           <div className="space-y-2">
             <label htmlFor="job" className="text-sm font-medium">
-              What is this bot's role?
+              What is this bot&apos;s role?
             </label>
+
             <input
               id="job"
               name="job"
@@ -92,15 +92,19 @@ export default function NewBotPage() {
               placeholder="e.g. Research, analyze, and summarize information"
               className={inputClass}
             />
+
             <p className="text-xs text-[#737373]">
               Describe its main responsibility in one sentence.
             </p>
           </div>
 
+          {/* Instructions */}
           <div className="space-y-2">
             <label htmlFor="instructions" className="text-sm font-medium">
-              Instructions <span className="text-[#737373]">(optional)</span>
+              Instructions{" "}
+              <span className="text-[#737373]">(optional)</span>
             </label>
+
             <textarea
               id="instructions"
               name="instructions"
@@ -109,11 +113,13 @@ export default function NewBotPage() {
               placeholder="How should this bot think, communicate, and approach its work?"
               className={`${inputClass} resize-y`}
             />
+
             <p className="text-xs text-[#737373]">
               Add behavior rules, expertise, preferred formats, or constraints.
             </p>
           </div>
 
+          {/* Actions */}
           <div className="flex flex-col-reverse gap-3 border-t border-[#E7E7E7] pt-6 sm:flex-row sm:justify-end">
             <Link
               href="/"
