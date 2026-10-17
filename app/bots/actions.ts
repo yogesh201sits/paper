@@ -20,9 +20,7 @@ export async function createBot(formData: FormData) {
   })
 
   if (!parsed.success) {
-    throw new Error(
-      parsed.error.issues[0]?.message ?? "Invalid bot details."
-    )
+    throw new Error(parsed.error.issues[0]?.message ?? "Invalid bot details.")
   }
 
   const [bot] = await db
@@ -30,7 +28,6 @@ export async function createBot(formData: FormData) {
     .values({
       ...parsed.data,
       userId,
-      sandboxId: "sandbox-pending",
     })
     .returning({ id: bots.id })
 

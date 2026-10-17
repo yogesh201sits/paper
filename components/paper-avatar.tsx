@@ -12,7 +12,7 @@ type PaperAvatarProps = {
 export function PaperAvatar({
   seed = "Felix",
   alt = "Avatar",
-  provider = "robohash",
+  provider = "dicebear",
   className,
   size = 40,
 }: PaperAvatarProps) {

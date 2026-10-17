@@ -22,6 +22,13 @@
       "when": 1792228605357,
       "tag": "0002_calm_richard_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792241993161,
+      "tag": "0003_swift_rocket_racer",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useId, useState } from "react"
 import { RefreshCw } from "lucide-react"
 import { PaperAvatar } from "@/components/paper-avatar"
 
@@ -9,7 +9,8 @@ function generateSeed() {
 }
 
 export function BotAvatarPicker() {
-  const [seed, setSeed] = useState("Felix")
+  const id = useId()
+  const [seed, setSeed] = useState(() => `paper-${id}`)
 
   return (
     <div className="flex items-center gap-4">

@@ -1,9 +1,10 @@
 import Link from "next/link"
 import { auth } from "@clerk/nextjs/server"
 import { desc, eq, inArray } from "drizzle-orm"
-import { Bot as BotIcon, Users } from "lucide-react"
+import { Bot as BotIcon } from "lucide-react"
 
 import { ChatCreateMenu } from "@/components/chat-create-menu"
+import { GroupAvatar } from "@/components/group-avatar"
 import { PaperAvatar } from "@/components/paper-avatar"
 import { db } from "@/db"
 
@@ -21,31 +22,43 @@ export default async function ChatsLayout({
   const { userId } = await auth()
   if (!userId) return children
 
-  const [{ id: activeChatId }, userChats] = await Promise.all([
+  const [{ id: activeChatId }, userChats, userBots] = await Promise.all([
     params,
     db
       .select()
       .from(chats)
       .where(eq(chats.userId, userId))
       .orderBy(desc(chats.lastMessageAt)),
+    db
+      .select({
+        id: bots.id,
+        name: bots.name,
+        job: bots.job,
+        avatar: bots.avatar,
+      })
+      .from(bots)
+      .where(eq(bots.userId, userId))
+      .orderBy(desc(bots.createdAt)),
   ])
 
   const memberships = userChats.length
     ? await db
         .select({
           chatId: chatMembers.chatId,
-          botName: bots.name,
+          name: bots.name,
           avatar: bots.avatar,
         })
         .from(chatMembers)
         .innerJoin(bots, eq(chatMembers.botId, bots.id))
-        .where(inArray(chatMembers.chatId, userChats.map((chat) => chat.id)))
+        .where(
+          inArray(
+            chatMembers.chatId,
+            userChats.map((chat) => chat.id)
+          )
+        )
     : []
 
-  const membersByChat = new Map<
-    string,
-    (typeof memberships)[number][]
-  >()
+  const membersByChat = new Map<string, (typeof memberships)[number][]>()
   for (const member of memberships) {
     const members = membersByChat.get(member.chatId) ?? []
     members.push(member)
@@ -54,16 +67,16 @@ export default async function ChatsLayout({
 
   return (
     <div className="min-h-screen bg-[#F7F7F7] md:flex md:h-screen md:min-h-0 md:overflow-hidden">
-      <aside className="flex h-48 shrink-0 flex-col border-b border-[#E7E7E7] bg-white md:sticky md:top-0 md:h-screen md:w-72 md:border-b-0 md:border-r">
+      <aside className="flex h-48 shrink-0 flex-col border-b border-[#E7E7E7] bg-white md:sticky md:top-0 md:h-screen md:w-72 md:border-r md:border-b-0">
         <div className="flex items-center justify-between px-4 py-3">
           <Link href="/chats" className="text-xl font-bold tracking-tight">
             paper<span className="text-[#FF6A2A]">.</span>
           </Link>
-          <ChatCreateMenu />
+          <ChatCreateMenu bots={userBots} />
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col px-3 pb-3">
-          <p className="mb-2 shrink-0 px-1 text-xs font-semibold uppercase tracking-wide text-[#737373]">
+          <p className="mb-2 shrink-0 px-1 text-xs font-semibold tracking-wide text-[#737373] uppercase">
             Your chats
           </p>
           <nav
@@ -75,7 +88,7 @@ export default async function ChatsLayout({
               const title =
                 chat.kind === "group"
                   ? chat.name || "Untitled group"
-                  : members[0]?.botName || "Bot conversation"
+                  : members[0]?.name || "Bot conversation"
 
               return (
                 <Link
@@ -89,13 +102,11 @@ export default async function ChatsLayout({
                   }`}
                 >
                   {chat.kind === "group" ? (
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#FFF2EC] text-[#FF6A2A]">
-                      <Users className="size-4" />
-                    </span>
+                    <GroupAvatar bots={members} />
                   ) : members[0] ? (
                     <PaperAvatar
                       seed={members[0].avatar}
-                      alt={members[0].botName}
+                      alt={members[0].name}
                       className="size-9 rounded-lg"
                     />
                   ) : (

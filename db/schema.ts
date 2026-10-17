@@ -1,4 +1,3 @@
-
 import { relations } from "drizzle-orm"
 import {
   index,
@@ -38,30 +37,31 @@ export const bots = pgTable(
 
     instructions: text("instructions"),
 
-    // Temporary until Daytona sandbox provisioning is implemented
-    sandboxId: text("sandbox_id")
-      .notNull()
-      .default("sandbox-pending"),
-
     createdAt: timestamp("created_at", {
       withTimezone: true,
     })
       .notNull()
       .defaultNow(),
   },
-  (table) => [
-    index("bots_user_id_idx").on(table.userId),
-  ]
+  (table) => [index("bots_user_id_idx").on(table.userId)]
 )
+
+// One shared runtime for all bots. Its provider ID is kept outside bot rows.
+export const sharedSandboxes = pgTable("shared_sandboxes", {
+  id: text("id").primaryKey(),
+  sandboxId: text("sandbox_id").notNull(),
+  updatedAt: timestamp("updated_at", {
+    withTimezone: true,
+  })
+    .notNull()
+    .defaultNow(),
+})
 
 // -----------------------------------------------------------------------------
 // Chats
 // -----------------------------------------------------------------------------
 
-export const chatKind = pgEnum("chat_kind", [
-  "direct",
-  "group",
-])
+export const chatKind = pgEnum("chat_kind", ["direct", "group"])
 
 export const chats = pgTable(
   "chats",
@@ -94,10 +94,7 @@ export const chats = pgTable(
   },
   (table) => [
     index("chats_user_id_idx").on(table.userId),
-    index("chats_user_last_message_idx").on(
-      table.userId,
-      table.lastMessageAt
-    ),
+    index("chats_user_last_message_idx").on(table.userId, table.lastMessageAt),
   ]
 )
 
@@ -180,10 +177,7 @@ export const messages = pgTable(
       .defaultNow(),
   },
   (table) => [
-    index("messages_chat_id_created_at_idx").on(
-      table.chatId,
-      table.createdAt
-    ),
+    index("messages_chat_id_created_at_idx").on(table.chatId, table.createdAt),
   ]
 )
 
@@ -191,10 +185,7 @@ export const messages = pgTable(
 // Usage ledger
 // -----------------------------------------------------------------------------
 
-export const usageKind = pgEnum("usage_kind", [
-  "ai",
-  "sandbox",
-])
+export const usageKind = pgEnum("usage_kind", ["ai", "sandbox"])
 
 export const usageEntries = pgTable(
   "usage_entries",
@@ -212,9 +203,7 @@ export const usageEntries = pgTable(
     amount: integer("amount").notNull(),
 
     // Prevents the same metered event from being counted twice
-    idempotencyKey: text("idempotency_key")
-      .notNull()
-      .unique(),
+    idempotencyKey: text("idempotency_key").notNull().unique(),
 
     createdAt: timestamp("created_at", {
       withTimezone: true,
@@ -243,20 +232,17 @@ export const chatsRelations = relations(chats, ({ many }) => ({
   messages: many(messages),
 }))
 
-export const chatMembersRelations = relations(
-  chatMembers,
-  ({ one }) => ({
-    chat: one(chats, {
-      fields: [chatMembers.chatId],
-      references: [chats.id],
-    }),
+export const chatMembersRelations = relations(chatMembers, ({ one }) => ({
+  chat: one(chats, {
+    fields: [chatMembers.chatId],
+    references: [chats.id],
+  }),
 
-    bot: one(bots, {
-      fields: [chatMembers.botId],
-      references: [bots.id],
-    }),
-  })
-)
+  bot: one(bots, {
+    fields: [chatMembers.botId],
+    references: [bots.id],
+  }),
+}))
 
 export const messagesRelations = relations(messages, ({ one }) => ({
   chat: one(chats, {
@@ -287,7 +273,6 @@ export const botInsertSchema = createInsertSchema(bots, {
 }).omit({
   id: true,
   userId: true,
-  sandboxId: true,
   createdAt: true,
 })
 
@@ -307,9 +292,7 @@ export const groupChatInsertSchema = createInsertSchema(chats, {
     createdAt: true,
   })
   .extend({
-    botIds: z
-      .array(z.string().min(1))
-      .min(2, "Pick at least two bots."),
+    botIds: z.array(z.string().min(1)).min(2, "Pick at least two bots."),
   })
 
 // -----------------------------------------------------------------------------

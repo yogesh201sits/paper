@@ -293,4 +293,6 @@ export async function retryAssistantResponse(formData: FormData) {
 
     throw error
   }
+
+  redirect(`/chats/${chatId}`)
 }

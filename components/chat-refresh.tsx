@@ -19,7 +19,7 @@ export function ChatRefresh({ hasPendingMessages }: ChatRefreshProps) {
       startTransition(() => {
         router.refresh()
       })
-    }, 2000)
+    }, 1500)
 
     return () => clearInterval(interval)
   }, [hasPendingMessages, router])

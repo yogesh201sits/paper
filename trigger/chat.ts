@@ -1,12 +1,14 @@
-
-import { task } from "@trigger.dev/sdk"
+import { task, tasks } from "@trigger.dev/sdk"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
-import { generateText, stepCountIs, tool } from "ai"
+import { generateText, stepCountIs, streamText, tool } from "ai"
 import { and, asc, eq } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/db"
 import { bots, chatMembers, chats, messages } from "@/db/schema"
+import { createSandboxTools } from "@/lib/daytona-tools"
+import { MEMORY_DIRECTORY } from "@/lib/daytona"
+import type { ensureSharedSandboxTask } from "@/trigger/shared-sandbox"
 
 type ChatTaskPayload = {
   userId: string
@@ -41,8 +43,8 @@ export const chatResponseTask = task({
         and(
           eq(messages.id, userMessageId),
           eq(messages.chatId, chatId),
-          eq(messages.role, "user"),
-        ),
+          eq(messages.role, "user")
+        )
       )
       .limit(1)
 
@@ -57,8 +59,8 @@ export const chatResponseTask = task({
         and(
           eq(messages.id, assistantMessageId),
           eq(messages.chatId, chatId),
-          eq(messages.role, "assistant"),
-        ),
+          eq(messages.role, "assistant")
+        )
       )
       .limit(1)
 
@@ -68,7 +70,7 @@ export const chatResponseTask = task({
 
     await db
       .update(messages)
-      .set({ status: "running" })
+      .set({ content: "", status: "running" })
       .where(eq(messages.id, assistantMessageId))
 
     try {
@@ -109,38 +111,71 @@ export const chatResponseTask = task({
       }
 
       const openrouter = createOpenRouter({ apiKey })
-      const modelName =
-        process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini"
+      const modelName = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini"
+
+      let sharedSandboxId: Promise<string> | undefined
+      const getSharedSandboxId = () => {
+        if (!sharedSandboxId) {
+          sharedSandboxId = tasks
+            .triggerAndWait<typeof ensureSharedSandboxTask>(
+              "paper-ensure-shared-sandbox",
+              undefined
+            )
+            .then((result) => {
+              if (!result.ok) {
+                throw new Error("Could not prepare the shared sandbox.", {
+                  cause: result.error,
+                })
+              }
+              return result.output.sandboxId
+            })
+            .catch((error) => {
+              sharedSandboxId = undefined
+              throw error
+            })
+        }
+        return sharedSandboxId
+      }
 
       const conversation = history
         .filter(
           (message) =>
             message.content.trim().length > 0 &&
-            message.content !== assistantMessage.content,
+            message.content !== assistantMessage.content
         )
         .map((message) => `${message.role}: ${message.content}`)
         .join("\n\n")
 
       let handoffBotId: string | null = null
-      const { text } = await generateText({
+      let streamedText = ""
+      let lastPersistedAt = 0
+      const result = streamText({
         model: openrouter.chat(modelName),
         system: `You are ${selectedBot.name}, an AI assistant working in PAPER.
 
 Your role: ${selectedBot.job}
 Your instructions: ${selectedBot.instructions || "Use your expertise to help the user."}
 
+You can use the shared Daytona sandbox tools to run commands, work with files, and interact with its desktop. Use them when the task requires execution or inspection in an isolated environment; they provision or wake the shared sandbox only when first used. Your saved memory is specific to you.
+
 Other bots available for delegation:
-${otherBots.length > 0
-            ? otherBots
-                .map((bot) => `- ${bot.name} (ID: ${bot.id}; role: ${bot.job})`)
-                .join("\n")
-            : "No other bots participate in this chat."}
+${
+  otherBots.length > 0
+    ? otherBots
+        .map((bot) => `- ${bot.name} (ID: ${bot.id}; role: ${bot.job})`)
+        .join("\n")
+    : "No other bots participate in this chat."
+}
 
 If another participating bot is better suited to a specific part of the task, use the handoffToBot tool at most once to delegate that work. Include a clear, self-contained task for the other bot. Use the returned work to produce one helpful final answer. Do not claim a handoff occurred unless you called the tool. Respond directly to the latest user message.`,
         prompt: conversation || userMessage.content,
-        ...(otherBots.length > 0
-          ? {
-              tools: {
+        tools: {
+          ...createSandboxTools(
+            getSharedSandboxId,
+            `${MEMORY_DIRECTORY}/${selectedBot.id}.md`
+          ),
+          ...(otherBots.length > 0
+            ? {
                 handoffToBot: tool({
                   description:
                     "Delegate part of the user's task to another bot participating in this chat.",
@@ -149,18 +184,16 @@ If another participating bot is better suited to a specific part of the task, us
                     task: z.string().min(1).max(20_000),
                   }),
                   execute: async ({ botId, task }) => {
-                    const targetBot = otherBots.find(
-                      (bot) => bot.id === botId,
-                    )
+                    const targetBot = otherBots.find((bot) => bot.id === botId)
                     if (!targetBot) {
                       throw new Error(
-                        "Handoffs can only target another bot in this chat.",
+                        "Handoffs can only target another bot in this chat."
                       )
                     }
 
                     if (handoffBotId) {
                       throw new Error(
-                        "Only one bot handoff is allowed per response.",
+                        "Only one bot handoff is allowed per response."
                       )
                     }
 
@@ -170,13 +203,18 @@ If another participating bot is better suited to a specific part of the task, us
                       system: `You are ${targetBot.name}, an AI assistant.
 Your role: ${targetBot.job}
 Your instructions: ${targetBot.instructions || "Use your expertise to help with the assigned task."}
-Complete the delegated task. Be accurate and concise, and state uncertainty when needed.`,
+You can use the shared Daytona sandbox tools to execute the delegated task when useful. Your saved memory is specific to you. Be accurate and concise, and state uncertainty when needed.`,
                       prompt: task,
+                      tools: createSandboxTools(
+                        getSharedSandboxId,
+                        `${MEMORY_DIRECTORY}/${targetBot.id}.md`
+                      ),
+                      stopWhen: stepCountIs(8),
                     })
 
                     if (!delegated.text.trim()) {
                       throw new Error(
-                        `${targetBot.name} returned an empty handoff response.`,
+                        `${targetBot.name} returned an empty handoff response.`
                       )
                     }
 
@@ -186,11 +224,25 @@ Complete the delegated task. Be accurate and concise, and state uncertainty when
                     }
                   },
                 }),
-              },
-              stopWhen: stepCountIs(2),
-            }
-          : {}),
+              }
+            : {}),
+        },
+        stopWhen: stepCountIs(10),
+        onChunk: async ({ chunk }) => {
+          if (chunk.type !== "text-delta") return
+
+          streamedText += chunk.text
+          const now = Date.now()
+          if (now - lastPersistedAt < 250) return
+
+          lastPersistedAt = now
+          await db
+            .update(messages)
+            .set({ content: streamedText })
+            .where(eq(messages.id, assistantMessageId))
+        },
       })
+      const text = await result.text
 
       if (!text.trim()) {
         throw new Error("The model returned an empty response.")
