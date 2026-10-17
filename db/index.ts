@@ -1,4 +1,5 @@
-import { drizzle } from "drizzle-orm/neon-http"
+import { Pool } from "pg"
+import { drizzle } from "drizzle-orm/node-postgres"
 import * as schema from "./schema"
 
 const databaseUrl = process.env.DATABASE_URL
@@ -7,4 +8,6 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL is not configured")
 }
 
-export const db = drizzle(databaseUrl, { schema })
+const pool = new Pool({ connectionString: databaseUrl })
+
+export const db = drizzle(pool, { schema })

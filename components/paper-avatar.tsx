@@ -6,13 +6,15 @@ type PaperAvatarProps = {
   alt?: string
   provider?: "robohash" | "dicebear"
   className?: string
+  size?: number
 }
 
 export function PaperAvatar({
   seed = "Felix",
   alt = "Avatar",
-  provider = "robohash",
+  provider = "dicebear",
   className,
+  size = 40,
 }: PaperAvatarProps) {
   const src =
     provider === "dicebear"
@@ -24,8 +26,9 @@ export function PaperAvatar({
       src={src}
       alt={alt}
       loading="lazy"
+      style={{ width: size, height: size }}
       className={cn(
-        "size-10 shrink-0 rounded-full border border-[#E7E7E7] bg-white object-cover",
+        "shrink-0 rounded-full border border-[#E7E7E7] bg-white object-cover",
         className
       )}
     />
