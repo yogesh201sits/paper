@@ -1,7 +1,7 @@
 
 import Link from "next/link"
 import { auth } from "@clerk/nextjs/server"
-import { and, desc, eq, inArray } from "drizzle-orm"
+import { desc, eq, inArray } from "drizzle-orm"
 import {
   ArrowUpRight,
   Bot as BotIcon,
@@ -162,7 +162,10 @@ export default async function ChatsPage() {
         </section>
 
         <aside className="space-y-6">
-          <section className="rounded-2xl border border-[#E7E7E7] bg-white p-5">
+          <section
+            id="new-chat"
+            className="scroll-mt-6 rounded-2xl border border-[#E7E7E7] bg-white p-5"
+          >
             <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-xl bg-[#FFF2EC]">
                 <Plus className="size-5 text-[#FF6A2A]" />
@@ -215,7 +218,10 @@ export default async function ChatsPage() {
             )}
           </section>
 
-          <section className="rounded-2xl border border-[#E7E7E7] bg-white p-5">
+          <section
+            id="new-group"
+            className="scroll-mt-6 rounded-2xl border border-[#E7E7E7] bg-white p-5"
+          >
             <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-xl bg-[#111111]">
                 <Users className="size-5 text-white" />

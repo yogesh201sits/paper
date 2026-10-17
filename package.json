@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "trigger": "bunx trigger.dev@latest dev --profile default"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -34,7 +35,7 @@
     "input-otp": "^1.5.0",
     "lucide-react": "^1.58.0",
     "next": "16.4.0",
-    "next-themes": "^0.4.6",
+    "pg": "^8.23.1",
     "react": "19.3.0",
     "react-day-picker": "^10.0.2",
     "react-dom": "19.3.0",
@@ -48,6 +49,7 @@
     "@tailwindcss/postcss": "^4",
     "@trigger.dev/build": "4.7.4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv": "^18.0.8",

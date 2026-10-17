@@ -162,6 +162,12 @@ export const messages = pgTable(
 
     content: text("content").notNull(),
 
+    botId: text("bot_id").references(() => bots.id, { onDelete: "set null" }),
+
+    handoffBotId: text("handoff_bot_id").references(() => bots.id, {
+      onDelete: "set null",
+    }),
+
     // Trigger.dev task ID for background execution
     taskId: text("task_id"),
 

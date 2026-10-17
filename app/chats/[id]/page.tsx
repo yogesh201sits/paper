@@ -1,131 +1,200 @@
-
-import Link from "next/link"
 import { auth } from "@clerk/nextjs/server"
-import { and, eq } from "drizzle-orm"
-import { ArrowLeft, Bot as BotIcon, Users } from "lucide-react"
+import { and, asc, eq } from "drizzle-orm"
 import { notFound, redirect } from "next/navigation"
 
-import { PaperAvatar } from "@/components/paper-avatar"
+import { ChatRefresh } from "@/components/chat-refresh"
+
 import { db } from "@/db"
-import { bots, chatMembers, chats } from "@/db/schema"
+import { bots, chatMembers, chats, messages } from "@/db/schema"
+import { PaperAvatar } from "@/components/paper-avatar"
+import { ChatComposer } from "@/components/chat-composer"
+import {
+    Message,
+    MessageAvatar,
+    MessageContent,
+} from "@/components/ui/message"
+import {
+    MessageScroller,
+    MessageScrollerContent,
+    MessageScrollerItem,
+    MessageScrollerProvider,
+    MessageScrollerViewport,
+    MessageScrollerButton,
+} from "@/components/ui/message-scroller"
 
-export default async function ChatPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { userId } = await auth()
-  if (!userId) redirect("/")
+type ChatPageProps = {
+    params: Promise<{ id: string }>
+}
 
-  const { id } = await params
+export default async function ChatPage({ params }: ChatPageProps) {
+    const { userId } = await auth()
 
-  const [chat] = await db
-    .select()
-    .from(chats)
-    .where(and(eq(chats.id, id), eq(chats.userId, userId)))
-    .limit(1)
+    if (!userId) {
+        redirect("/sign-in")
+    }
 
-  if (!chat) notFound()
+    const { id } = await params
 
-  const members = await db
-    .select({
-      id: bots.id,
-      name: bots.name,
-      avatar: bots.avatar,
-      job: bots.job,
-    })
-    .from(chatMembers)
-    .innerJoin(bots, eq(chatMembers.botId, bots.id))
-    .where(eq(chatMembers.chatId, chat.id))
+    const [chat] = await db
+        .select()
+        .from(chats)
+        .where(and(eq(chats.id, id), eq(chats.userId, userId)))
+        .limit(1)
 
-  const title =
-    chat.kind === "group"
-      ? chat.name || "Untitled group"
-      : members[0]?.name || "Bot conversation"
+    if (!chat) {
+        notFound()
+    }
 
-  return (
-    <main className="flex min-h-screen flex-col bg-[#F7F7F7] text-[#111111]">
-      <header className="border-b border-[#E7E7E7] bg-white">
-        <div className="mx-auto flex h-16 max-w-5xl items-center gap-4 px-5 sm:px-8">
-          <Link
-            href="/chats"
-            aria-label="Back to chats"
-            className="rounded-lg border border-[#E7E7E7] p-2 transition hover:bg-[#FFF2EC]"
-          >
-            <ArrowLeft className="size-4" />
-          </Link>
+    const members = await db
+        .select({
+            id: bots.id,
+            name: bots.name,
+            job: bots.job,
+            avatar: bots.avatar,
+        })
+        .from(chatMembers)
+        .innerJoin(bots, eq(chatMembers.botId, bots.id))
+        .where(eq(chatMembers.chatId, chat.id))
 
-          {chat.kind === "group" ? (
-            <div className="flex size-10 items-center justify-center rounded-xl bg-[#FFF2EC]">
-              <Users className="size-5 text-[#FF6A2A]" />
-            </div>
-          ) : members[0] ? (
-            <PaperAvatar
-              seed={members[0].avatar}
-              alt={members[0].name}
-              className="size-10 rounded-xl"
-            />
-          ) : (
-            <div className="flex size-10 items-center justify-center rounded-xl bg-[#F7F7F7]">
-              <BotIcon className="size-5" />
-            </div>
-          )}
+    const chatMessages = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.chatId, chat.id))
+        .orderBy(asc(messages.createdAt))
+    const hasPendingMessages = chatMessages.some(
+        (message) =>
+            message.role === "assistant" &&
+            (message.status === "queued" || message.status === "running"),
+    )
 
-          <div className="min-w-0">
-            <h1 className="truncate font-semibold">{title}</h1>
-            <p className="text-xs text-[#737373]">
-              {members.length} {members.length === 1 ? "agent" : "agents"}
-            </p>
-          </div>
-        </div>
-      </header>
+    const title =
+        chat.kind === "group"
+            ? chat.name || "Group chat"
+            : "Conversation"
+    const lastSelectedBotId = [...chatMessages]
+        .reverse()
+        .find((message) => message.role === "assistant" && message.botId)
+        ?.botId ?? undefined
 
-      <section className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-5 py-8 sm:px-8">
-        <div className="flex flex-1 flex-col items-center justify-center py-12 text-center">
-          <div className="flex size-14 items-center justify-center rounded-2xl bg-[#FFF2EC]">
-            <BotIcon className="size-6 text-[#FF6A2A]" />
-          </div>
-
-          <h2 className="mt-5 text-xl font-semibold">
-            Start working with {title}
-          </h2>
-
-          <p className="mt-2 max-w-md text-sm leading-6 text-[#737373]">
-            Your conversation workspace is ready. Message history, agent
-            responses, and background execution will be connected next.
-          </p>
-
-          {members.length > 0 && (
-            <div className="mt-7 flex flex-wrap justify-center gap-3">
-              {members.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex items-center gap-2 rounded-xl border border-[#E7E7E7] bg-white px-3 py-2"
-                >
-                  <PaperAvatar
-                    seed={member.avatar}
-                    alt={member.name}
-                    className="size-8 rounded-lg"
-                  />
-                  <div className="text-left">
-                    <p className="text-sm font-medium">{member.name}</p>
-                    <p className="max-w-40 truncate text-xs text-[#737373]">
-                      {member.job}
+    return (
+        <main className="flex h-[calc(100dvh-12rem)] min-h-[24rem] flex-col bg-[#F7F7F7] text-[#111111] md:h-full md:min-h-0">
+            <ChatRefresh hasPendingMessages={hasPendingMessages} />
+            <header className="flex h-14 shrink-0 items-center border-b border-[#E7E7E7] bg-white px-4 md:px-6">
+                <div className="min-w-0">
+                    <h1 className="truncate text-sm font-semibold">{title}</h1>
+                    <p className="text-xs text-[#737373]">
+                        {chat.kind === "group"
+                            ? `${members.length} participating bots · choose one to reply`
+                            : "Choose a bot to reply"}
                     </p>
-                  </div>
                 </div>
-              ))}
-            </div>
-          )}
+            </header>
 
-          <Link
-            href="/bots"
-            className="mt-8 rounded-xl bg-[#FF6A2A] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#E95A1D]"
-          >
-            Manage bots
-          </Link>
-        </div>
-      </section>
-    </main>
-  )
+            <section className="min-h-0 flex-1">
+                <MessageScrollerProvider autoScroll>
+                    <MessageScroller className="h-full">
+                        <MessageScrollerViewport>
+                            <MessageScrollerContent className="mx-auto w-full max-w-4xl space-y-4 px-4 py-6 md:px-8">
+                                {chatMessages.length === 0 ? (
+                                    <div className="flex min-h-[35vh] flex-col items-center justify-center text-center">
+                                        <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-[#FFF2EC] text-2xl text-[#FF6A2A]">
+                                            ✳
+                                        </div>
+                                        <h2 className="font-semibold">Start a conversation</h2>
+                                        <p className="mt-2 text-sm text-muted-foreground">
+                                            Choose a bot below and send your first message.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    chatMessages.map((message) => {
+                                        const isUser = message.role === "user"
+                                        const responseBot =
+                                            members.find((bot) => bot.id === message.botId) ??
+                                            members[0]
+                                        const handoffBot = members.find(
+                                            (bot) => bot.id === message.handoffBotId,
+                                        )
+
+                                        return (
+                                            <MessageScrollerItem
+                                                key={message.id}
+                                                messageId={message.id}
+                                                scrollAnchor={isUser}
+                                            >
+                                                <Message
+                                                    align={isUser ? "end" : "start"}
+                                                    className="items-end gap-2"
+                                                >
+                                                    {isUser ? (
+                                                        <MessageContent className="w-fit max-w-[min(82%,44rem)] flex-none gap-0">
+                                                            <div className="w-fit max-w-full whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-[#FF6A2A] px-4 py-3 text-sm leading-6 text-white shadow-sm">
+                                                                {message.content}
+                                                            </div>
+                                                        </MessageContent>
+                                                    ) : (
+                                                        <>
+                                                            <MessageAvatar className="mb-1 size-9 border-0 bg-transparent">
+                                                                {responseBot && (
+                                                                    <PaperAvatar
+                                                                        seed={responseBot.avatar}
+                                                                        alt={responseBot.name}
+                                                                        size={36}
+                                                                        className="size-9"
+                                                                    />
+                                                                )}
+                                                            </MessageAvatar>
+                                                            <MessageContent className="max-w-[calc(100%-2.75rem)] flex-1 gap-1">
+                                                                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                                                                    <span className="font-semibold text-[#111111]">
+                                                                        {responseBot?.name || "Assistant"}
+                                                                    </span>
+                                                                    {handoffBot && (
+                                                                        <span className="rounded-full bg-[#FFF2EC] px-2 py-0.5 font-medium text-[#B94719]">
+                                                                            Handed off to {handoffBot.name}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                {message.content ? (
+                                                                    <p className="whitespace-pre-wrap break-words text-sm leading-7 text-[#262626]">
+                                                                        {message.content}
+                                                                    </p>
+                                                                ) : (
+                                                                    <p className="text-sm text-muted-foreground">
+                                                                        {message.status === "queued"
+                                                                            ? "Waiting for a response..."
+                                                                            : message.status === "failed"
+                                                                                ? "Response failed. Please try again."
+                                                                                : "Thinking..."}
+                                                                    </p>
+                                                                )}
+                                                                {message.status === "failed" && (
+                                                                    <p className="text-xs text-destructive">
+                                                                        This response could not be completed.
+                                                                    </p>
+                                                                )}
+                                                            </MessageContent>
+                                                        </>
+                                                    )}
+                                                </Message>
+                                            </MessageScrollerItem>
+                                        )
+                                    })
+                                )}
+                            </MessageScrollerContent>
+                        </MessageScrollerViewport>
+
+                        <MessageScrollerButton />
+                    </MessageScroller>
+                </MessageScrollerProvider>
+            </section>
+
+            <footer className="shrink-0 bg-[#F7F7F7] p-4 md:px-6">
+                <ChatComposer
+                    chatId={chat.id}
+                    bots={members}
+                    defaultBotId={lastSelectedBotId}
+                />
+            </footer>
+        </main>
+    )
 }
